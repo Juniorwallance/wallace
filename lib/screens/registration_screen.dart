@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:lipalocal/database/database_helper.dart'; // Importing the database helper
 
-void main() => runApp(LipalocalApp());
+void main() => runApp(const LipalocalApp());
 
 class LipalocalApp extends StatelessWidget {
   const LipalocalApp({super.key});
@@ -9,7 +10,10 @@ class LipalocalApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Lipalocal Registration',
-      home: RegistrationPage(),
+      theme: ThemeData(
+        primarySwatch: Colors.blue,
+      ),
+      home: const RegistrationPage(),
     );
   }
 }
@@ -25,19 +29,33 @@ class RegistrationPage extends StatefulWidget {
 class _RegistrationPageState extends State<RegistrationPage> {
   final _formKey = GlobalKey<FormState>();
   String _userType = 'Artisan'; // Default user type
+  final TextEditingController _fullNameController = TextEditingController();
+  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _phoneNumberController = TextEditingController();
+  final TextEditingController _skillOrCountryController = TextEditingController();
+
+  @override
+  void dispose() {
+    _fullNameController.dispose();
+    _emailController.dispose();
+    _phoneNumberController.dispose();
+    _skillOrCountryController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Lipalocal Registration'),
+        title: const Text('Lipalocal Registration'),
       ),
       body: Padding(
-        padding: EdgeInsets.all(16.0),
+        padding: const EdgeInsets.all(16.0),
         child: Form(
           key: _formKey,
           child: Column(
             children: <Widget>[
+              // Dropdown to select user type (Artisan/Tourist)
               DropdownButtonFormField<String>(
                 value: _userType,
                 onChanged: (String? newValue) {
@@ -52,18 +70,24 @@ class _RegistrationPageState extends State<RegistrationPage> {
                     child: Text(value),
                   );
                 }).toList(),
-                decoration: InputDecoration(labelText: 'Register as'),
+                decoration: const InputDecoration(labelText: 'Register as'),
               ),
+              // Conditional rendering of forms based on user type
               if (_userType == 'Artisan') ..._buildArtisanForm(),
               if (_userType == 'Tourist') ..._buildTouristForm(),
-              SizedBox(height: 20),
+              const SizedBox(height: 20),
               ElevatedButton(
-                onPressed: () {
+                onPressed: () async {
                   if (_formKey.currentState!.validate()) {
-                    // Process registration
+                    // Process registration logic here
+                    if (_userType == 'Artisan') {
+                      await _registerArtisan();
+                    } else {
+                      await _registerTourist();
+                    }
                   }
                 },
-                child: Text('Register'),
+                child: const Text('Register'),
               ),
             ],
           ),
@@ -72,85 +96,83 @@ class _RegistrationPageState extends State<RegistrationPage> {
     );
   }
 
+  // Build form fields specific to Artisan registration
   List<Widget> _buildArtisanForm() {
     return [
-      TextFormField(
-        decoration: InputDecoration(labelText: 'Full Name'),
-        validator: (value) {
-          if (value == null || value.isEmpty) {
-            return 'Please enter your full name';
-          }
-          return null;
-        },
-      ),
-      TextFormField(
-        decoration: InputDecoration(labelText: 'Email Address'),
-        validator: (value) {
-          if (value == null || value.isEmpty) {
-            return 'Please enter your email address';
-          }
-          return null;
-        },
-      ),
-      TextFormField(
-        decoration: InputDecoration(labelText: 'Phone Number'),
-        validator: (value) {
-          if (value == null || value.isEmpty) {
-            return 'Please enter your phone number';
-          }
-          return null;
-        },
-      ),
-      TextFormField(
-        decoration: InputDecoration(labelText: 'Skill'),
-        validator: (value) {
-          if (value == null || value.isEmpty) {
-            return 'Please enter your skill';
-          }
-          return null;
-        },
-      ),
+      _buildTextField(label: 'Full Name', controller: _fullNameController, validator: _validateNotEmpty),
+      _buildTextField(label: 'Email Address', controller: _emailController, validator: _validateEmail),
+      _buildTextField(label: 'Phone Number', controller: _phoneNumberController, validator: _validateNotEmpty),
+      _buildTextField(label: 'Skill', controller: _skillOrCountryController, validator: _validateNotEmpty),
     ];
   }
 
+  // Build form fields specific to Tourist registration
   List<Widget> _buildTouristForm() {
     return [
-      TextFormField(
-        decoration: InputDecoration(labelText: 'Full Name'),
-        validator: (value) {
-          if (value == null || value.isEmpty) {
-            return 'Please enter your full name';
-          }
-          return null;
-        },
-      ),
-      TextFormField(
-        decoration: InputDecoration(labelText: 'Email Address'),
-        validator: (value) {
-          if (value == null || value.isEmpty) {
-            return 'Please enter your email address';
-          }
-          return null;
-        },
-      ),
-      TextFormField(
-        decoration: InputDecoration(labelText: 'Phone Number'),
-        validator: (value) {
-          if (value == null || value.isEmpty) {
-            return 'Please enter your phone number';
-          }
-          return null;
-        },
-      ),
-      TextFormField(
-        decoration: InputDecoration(labelText: 'Country'),
-        validator: (value) {
-          if (value == null || value.isEmpty) {
-            return 'Please enter your country';
-          }
-          return null;
-        },
-      ),
+      _buildTextField(label: 'Full Name', controller: _fullNameController, validator: _validateNotEmpty),
+      _buildTextField(label: 'Email Address', controller: _emailController, validator: _validateEmail),
+      _buildTextField(label: 'Phone Number', controller: _phoneNumberController, validator: _validateNotEmpty),
+      _buildTextField(label: 'Country', controller: _skillOrCountryController, validator: _validateNotEmpty),
     ];
+  }
+
+  // Helper method to create text fields with validation
+  TextFormField _buildTextField({required String label, required TextEditingController controller, required String? Function(String?) validator}) {
+    return TextFormField(
+      controller: controller,
+      decoration: InputDecoration(labelText: label),
+      validator: validator,
+    );
+  }
+
+  // Validation function to check if a field is not empty
+  String? _validateNotEmpty(String? value) {
+    if (value == null || value.isEmpty) {
+      return 'Please enter your $value';
+    }
+    return null;
+  }
+
+  // Validation function to check if the email format is valid
+  String? _validateEmail(String? value) {
+    // Simple email validation regex
+    final emailRegex = RegExp(r'^[^@]+@[^@]+\.[^@]+');
+    if (value == null || value.isEmpty) {
+      return 'Please enter your email address';
+    } else if (!emailRegex.hasMatch(value)) {
+      return 'Please enter a valid email address';
+    }
+    return null;
+  }
+
+  Future<void> _registerArtisan() async {
+    await DatabaseHelper.insertArtisan({
+      'fullName': _fullNameController.text,
+      'email': _emailController.text,
+      'phoneNumber': _phoneNumberController.text,
+      'skill': _skillOrCountryController.text,
+    });
+    _showRegistrationSuccess();
+  }
+
+  Future<void> _registerTourist() async {
+    await DatabaseHelper.insertTourist({
+      'fullName': _fullNameController.text,
+      'email': _emailController.text,
+      'phoneNumber': _phoneNumberController.text,
+      'country': _skillOrCountryController.text,
+    });
+    _showRegistrationSuccess();
+  }
+
+  void _showRegistrationSuccess() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Registration successful!')),
+    );
+    // Clear the form fields after successful registration
+    _fullNameController.clear();
+    _emailController.clear();
+    _phoneNumberController.clear();
+    _skillOrCountryController.clear();
   }
 }

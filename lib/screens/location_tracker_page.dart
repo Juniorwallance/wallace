@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:lipalocal/database/database_helper.dart';
 
-void main() => runApp(MyApp());
+void main() => runApp(const MyApp());
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
@@ -9,11 +11,11 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Lipalocal App', // Added title for better app identification
+      title: 'Lipalocal Artisan Tracker',
       theme: ThemeData(
-        primarySwatch: Colors.green, // Define a theme for consistency
+        primarySwatch: Colors.green,
       ),
-      home: LocationTrackerPage(),
+      home: const LocationTrackerPage(),
     );
   }
 }
@@ -22,45 +24,172 @@ class LocationTrackerPage extends StatefulWidget {
   const LocationTrackerPage({super.key});
 
   @override
-  // ignore: library_private_types_in_public_api
-  _LocationTrackerPage createState() => _LocationTrackerPage();
+  State<LocationTrackerPage> createState() => _LocationTrackerPageState();
 }
 
-class _LocationTrackerPage extends State<LocationTrackerPage> {
-  GoogleMapController? mapController;
-  final LatLng _center = const LatLng(-1.2921, 36.8219); // Nairobi, Kenya
-  final Set<Marker> _markers = {};
+class _LocationTrackerPageState extends State<LocationTrackerPage> {
+  GoogleMapController? _mapController;
+  LatLng? _currentPosition;
+  final Set<Marker> _artisanMarkers = {};
+  bool _isLoading = true;
+  bool _locationServiceEnabled = false;
+  bool _permissionGranted = false;
 
-  void _onMapCreated(GoogleMapController controller) {
-    mapController = controller;
-    _addMarkers(); // Moved marker addition to a separate method for clarity
+  @override
+  void initState() {
+    super.initState();
+    _checkLocationServices();
   }
 
-  void _addMarkers() {
-    _markers.add(
-      Marker(
-        markerId: MarkerId('artisan1'),
-        position: LatLng(-1.2921, 36.8219),
-        infoWindow: InfoWindow(title: 'Artisan 1', snippet: 'Handmade crafts'),
+  Future<void> _checkLocationServices() async {
+    _locationServiceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!_locationServiceEnabled) {
+      _showLocationServiceAlert();
+      return;
+    }
+
+    await _checkLocationPermission();
+    if (_permissionGranted) {
+      await _getCurrentLocation();
+      await _loadArtisanLocations();
+    }
+  }
+
+  Future<void> _checkLocationPermission() async {
+    LocationPermission permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) {
+        _showPermissionDeniedAlert();
+        return;
+      }
+    }
+    _permissionGranted = true;
+  }
+
+  Future<void> _getCurrentLocation() async {
+    try {
+      Position position = await Geolocator.getCurrentPosition();
+      setState(() {
+        _currentPosition = LatLng(position.latitude, position.longitude);
+      });
+
+      _mapController?.animateCamera(
+        CameraUpdate.newLatLngZoom(_currentPosition!, 14),
+      );
+    } catch (e) {
+      debugPrint('Error getting location: $e');
+    }
+  }
+
+  Future<void> _loadArtisanLocations() async {
+    try {
+      final artisans = await DatabaseHelper.getArtisansWithLocations();
+      
+      // Default marker icon
+      final BitmapDescriptor markerIcon = BitmapDescriptor.defaultMarkerWithHue(
+        BitmapDescriptor.hueOrange,
+      );
+
+      setState(() {
+        _artisanMarkers.clear();
+        for (var artisan in artisans) {
+          _artisanMarkers.add(
+            Marker(
+              markerId: MarkerId(artisan['id'].toString()),
+              position: LatLng(
+                artisan['latitude'] as double,
+                artisan['longitude'] as double,
+              ),
+              infoWindow: InfoWindow(
+                title: artisan['businessName']?.toString() ?? 'Artisan',
+                snippet: artisan['skill']?.toString() ?? 'Handmade crafts',
+                onTap: () {
+                  // Handle marker tap (e.g., navigate to artisan details)
+                },
+              ),
+              icon: markerIcon,
+            ),
+          );
+        }
+        _isLoading = false;
+      });
+    } catch (e) {
+      debugPrint('Error loading artisans: $e');
+      setState(() => _isLoading = false);
+    }
+  }
+
+  void _onMapCreated(GoogleMapController controller) {
+    _mapController = controller;
+  }
+
+  void _showLocationServiceAlert() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Location Services Disabled'),
+        content: const Text('Please enable location services to use this feature.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('OK'),
+          ),
+        ],
       ),
     );
-    // Additional markers can be added here
+  }
+
+  void _showPermissionDeniedAlert() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Location Permission Denied'),
+        content: const Text('This app needs location permissions to show nearby artisans.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Lipalocal App'),
+        title: const Text('Artisan Locations'),
         backgroundColor: Colors.green[700],
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: () {
+              setState(() => _isLoading = true);
+              _loadArtisanLocations();
+            },
+          ),
+        ],
       ),
-      body: GoogleMap(
-        onMapCreated: _onMapCreated,
-        initialCameraPosition: CameraPosition(
-          target: _center,
-          zoom: 11.0,
-        ),
-        markers: _markers,
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : GoogleMap(
+              onMapCreated: _onMapCreated,
+              initialCameraPosition: CameraPosition(
+                target: _currentPosition ?? const LatLng(-1.2921, 36.8219),
+                zoom: 14.0,
+              ),
+              markers: _artisanMarkers,
+              myLocationEnabled: _permissionGranted,
+              myLocationButtonEnabled: _permissionGranted,
+              compassEnabled: true,
+              mapToolbarEnabled: true,
+            ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _getCurrentLocation,
+        backgroundColor: Colors.green,
+        child: const Icon(Icons.my_location),
       ),
     );
   }

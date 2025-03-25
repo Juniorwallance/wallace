@@ -1,8 +1,11 @@
 // ignore_for_file: unused_import, unused_field
 
 import 'package:flutter/material.dart';
-import 'package:lipalocal/database/database_helper.dart' as db;
-import 'package:lipalocal/database/task.dart' as t;
+import 'package:sqflite/sqflite.dart'; // Import sqflite
+// ignore: depend_on_referenced_packages
+import 'package:path/path.dart'; // Import path
+import 'package:path_provider/path_provider.dart'; // Import path_provider
+
 import 'package:lipalocal/screens/home_page.dart';
 import 'package:lipalocal/screens/profile_screen.dart';
 import 'package:lipalocal/screens/listings_screen.dart';
@@ -12,11 +15,9 @@ import 'package:lipalocal/screens/messages_screen.dart';
 import 'package:lipalocal/screens/settings_screen.dart';
 import 'package:lipalocal/screens/signin_screen.dart';
 import 'package:lipalocal/screens/artisan_list_page.dart';
-import 'package:lipalocal/screens/location_tracker_page.dart';
 import 'package:lipalocal/screens/signup_screen.dart';
 import 'package:lipalocal/screens/aboutus_screen.dart';
 import 'package:lipalocal/screens/registration_screen.dart';
-import 'package:lipalocal/screens/tasks_screen.dart'; // Import your new screen
 
 void main() {
   runApp(const LipaLocalApp());
@@ -44,33 +45,7 @@ class LipaLocalApp extends StatelessWidget {
         '/aboutus': (context) => const AboutUsPage(),
         '/registration': (context) => const RegistrationPage(),
         '/artisans': (context) => const ArtisanListPage(),
-        '/location': (context) => const LocationTrackerPage(),
-        '/task': (context) => const TaskScreen(),
       },
     );
-  }
-}
-
-class MyWidget extends StatefulWidget {
-  const MyWidget({super.key});
-
-  @override
-  // ignore: library_private_types_in_public_api
-  _MyWidgetState createState() => _MyWidgetState();
-}
-
-class _MyWidgetState extends State<MyWidget> {
-  final dbHelper = db.DatabaseHelper();
-  late Future<List<t.Task>> _tasksFuture;
-
-  @override
-  void initState() {
-    super.initState();
-    _tasksFuture = dbHelper.fetchTasks() as Future<List<t.Task>>;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    throw UnimplementedError();
   }
 }

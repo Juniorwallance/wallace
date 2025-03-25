@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:lipalocal/database/database_helper.dart';
 
-/// Global list to hold orders
-List<Order> ordersList = [];
-
+// Entry point of the application
 void main() {
   runApp(const MyApp());
 }
 
+// Main application widget
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
@@ -22,6 +22,7 @@ class MyApp extends StatelessWidget {
   }
 }
 
+// Screen to display orders
 class OrdersScreen extends StatelessWidget {
   const OrdersScreen({super.key});
 
@@ -29,13 +30,38 @@ class OrdersScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('My Orders')),
-      body: const Center(
-        child: Text('Orders will be displayed here.'), // Placeholder
+      body: FutureBuilder<List<Order>>(
+        future: DatabaseHelper.getOrders(), // Fetch orders from the database
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          } else if (snapshot.hasError) {
+            return Center(child: Text('Error: ${snapshot.error}'));
+          } else if (snapshot.hasData && snapshot.data!.isNotEmpty) {
+            final orders = snapshot.data!;
+            return ListView.builder(
+              itemCount: orders.length,
+              itemBuilder: (context, index) {
+                final order = orders[index];
+                return ListTile(
+                  title: Text('${order.product.name} x${order.quantity}'),
+                  subtitle: Text(
+                      'From ${order.artisan.name} - Total: KES ${(order.product.price * order.quantity).toStringAsFixed(2)}'),
+                  trailing: Text(
+                      '${order.orderTime.hour}:${order.orderTime.minute.toString().padLeft(2, '0')}'),
+                );
+              },
+            );
+          } else {
+            return const Center(child: Text('No orders placed yet.'));
+          }
+        },
       ),
     );
   }
 }
 
+// Artisan class
 class Artisan {
   final String name;
   final String specialty;
@@ -52,6 +78,7 @@ class Artisan {
   });
 }
 
+// Product class
 class Product {
   final String id;
   final String name;
@@ -66,6 +93,7 @@ class Product {
   });
 }
 
+// Order class
 class Order {
   final String id;
   final Artisan artisan;
@@ -80,10 +108,49 @@ class Order {
     required this.quantity,
     required this.orderTime,
   });
+
+  // Convert Order to a Map for database storage
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'artisan_name': artisan.name,
+      'artisan_specialty': artisan.specialty,
+      'artisan_location': artisan.location,
+      'artisan_description': artisan.description,
+      'artisan_imageUrl': artisan.imageUrl,
+      'product_id': product.id,
+      'product_name': product.name,
+      'product_price': product.price,
+      'product_imageUrl': product.imageUrl,
+      'quantity': quantity,
+      'order_time': orderTime.toIso8601String(),
+    };
+  }
+
+  // Create an Order from a Map (from database)
+  static Order fromMap(Map<String, dynamic> map) {
+    return Order(
+      id: map['id'],
+      artisan: Artisan(
+        name: map['artisan_name'],
+        specialty: map['artisan_specialty'],
+        location: map['artisan_location'],
+        description: map['artisan_description'],
+        imageUrl: map['artisan_imageUrl'],
+      ),
+      product: Product(
+        id: map['product_id'],
+        name: map['product_name'],
+        price: map['product_price'],
+        imageUrl: map['product_imageUrl'],
+      ),
+      quantity: map['quantity'],
+      orderTime: DateTime.parse(map['order_time']),
+    );
+  }
 }
 
-/// Displays a list of artisans with an "Order" button.
-/// Also has an icon in the AppBar to navigate to the OrdersScreen.
+// Screen to display artisans
 class ArtisanListScreen extends StatelessWidget {
   const ArtisanListScreen({super.key});
 
@@ -173,8 +240,7 @@ class ArtisanListScreen extends StatelessWidget {
   }
 }
 
-/// OrderScreen allows the tourist (user) to place an order,
-/// then adds the order to the global list and shows an order confirmation.
+// Screen to place an order
 class OrderScreen extends StatefulWidget {
   final Artisan artisan;
   final Product product;
@@ -223,7 +289,7 @@ class _OrderScreenState extends State<OrderScreen> {
               height: 150,
               fit: BoxFit.cover,
               imageErrorBuilder: (context, error, stackTrace) =>
-                  const Icon(Icons.error, size: 100),
+              const Icon(Icons.error, size: 100),
             ),
             const SizedBox(height: 16),
             Text(
@@ -257,8 +323,8 @@ class _OrderScreenState extends State<OrderScreen> {
             ),
             const Spacer(),
             ElevatedButton(
-              onPressed: () {
-                // Create an order and add it to the global orders list.
+              onPressed: () async {
+                // Create an order
                 Order newOrder = Order(
                   id: DateTime.now().millisecondsSinceEpoch.toString(),
                   artisan: widget.artisan,
@@ -266,23 +332,26 @@ class _OrderScreenState extends State<OrderScreen> {
                   quantity: quantity,
                   orderTime: DateTime.now(),
                 );
-                ordersList.add(newOrder);
 
-                // Show confirmation dialog. After confirming, navigate to OrdersScreen.
+                // Insert the order into the database
+                await DatabaseHelper.insertOrder(newOrder as Map<String, dynamic>);
+
+                // Show confirmation dialog
                 showDialog(
+                  // ignore: use_build_context_synchronously
                   context: context,
                   builder: (_) => AlertDialog(
                     title: const Text('Order Confirmed'),
                     content: Text(
                       'Your order for $quantity x ${widget.product.name} '
-                      'from ${widget.artisan.name} has been placed.\n'
-                      'Total: KES ${totalPrice.toStringAsFixed(2)}',
+                          'from ${widget.artisan.name} has been placed.\n'
+                          'Total: KES ${totalPrice.toStringAsFixed(2)}',
                     ),
                     actions: [
                       TextButton(
                         onPressed: () {
-                          Navigator.pop(context); // Close the dialog.
-                          Navigator.pop(context); // Close the OrderScreen.
+                          Navigator.pop(context); // Close the dialog
+                          Navigator.pop(context); // Close the OrderScreen
                           Navigator.push(
                             context,
                             MaterialPageRoute(
@@ -306,30 +375,4 @@ class _OrderScreenState extends State<OrderScreen> {
       ),
     );
   }
-}
-
-/// OrdersScreen now reads from the global ordersList and displays each order
-
-@override
-Widget build(BuildContext context) {
-  return Scaffold(
-    appBar: AppBar(
-      title: const Text('Your Orders'),
-    ),
-    body: ordersList.isEmpty
-        ? const Center(child: Text('No orders placed yet.'))
-        : ListView.builder(
-            itemCount: ordersList.length,
-            itemBuilder: (context, index) {
-              final order = ordersList[index];
-              return ListTile(
-                title: Text('${order.product.name} x${order.quantity}'),
-                subtitle: Text(
-                    'From ${order.artisan.name} - Total: KES ${(order.product.price * order.quantity).toStringAsFixed(2)}'),
-                trailing: Text(
-                    '${order.orderTime.hour}:${order.orderTime.minute.toString().padLeft(2, '0')}'),
-              );
-            },
-          ),
-  );
 }

@@ -1,7 +1,21 @@
 import 'package:flutter/material.dart';
+import 'package:lipalocal/database/database_helper.dart';
 
-class ArtisanListPage extends StatelessWidget {
+class ArtisanListPage extends StatefulWidget {
   const ArtisanListPage({super.key});
+
+  @override
+  ArtisanListPageState createState() => ArtisanListPageState();
+}
+
+class ArtisanListPageState extends State<ArtisanListPage> {
+  late Future<List<Map<String, dynamic>>> _artisanDataFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _artisanDataFuture = DatabaseHelper.getArtisans(); // Use the specific method for artisans
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -10,75 +24,63 @@ class ArtisanListPage extends StatelessWidget {
         title: const Text('Artisans'),
         backgroundColor: Colors.orange.shade600,
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: ListView.builder(
-          itemCount: artisans.length, // Replace with actual data source
-          itemBuilder: (context, index) {
-            final artisan = artisans[index];
-            return Card(
-              elevation: 4,
-              margin: const EdgeInsets.symmetric(vertical: 8),
-              child: ListTile(
-                leading: CircleAvatar(
-                  backgroundImage: NetworkImage(artisan['image'] ?? ''),
-                  radius: 30,
-                ),
-                title: Text(
-                  artisan['name'] ?? 'Unknown Artisan',
-                  style: const TextStyle(fontWeight: FontWeight.bold),
-                ),
-                subtitle: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Location: ${artisan['location'] ?? 'Unknown Location'}',
-                    ),
-                    Text('Shop Name: ${artisan['shopName'] ?? 'Unknown Shop'}'),
-                  ],
-                ),
-                trailing: const Icon(Icons.arrow_forward_ios),
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder:
-                          (context) => ArtisanDetailsPage(artisan: artisan),
+      body: FutureBuilder<List<Map<String, dynamic>>>(
+        future: _artisanDataFuture,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          } else if (snapshot.hasError) {
+            return Center(child: Text('Error: ${snapshot.error}'));
+          } else if (snapshot.hasData && snapshot.data!.isNotEmpty) {
+            final artisans = snapshot.data!;
+            return Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: ListView.builder(
+                itemCount: artisans.length,
+                itemBuilder: (context, index) {
+                  final artisan = artisans[index];
+                  return Card(
+                    elevation: 4,
+                    margin: const EdgeInsets.symmetric(vertical: 8),
+                    child: ListTile(
+                      leading: CircleAvatar(
+                        backgroundImage: NetworkImage(artisan['imageUrl'] ?? ''),
+                        radius: 30,
+                      ),
+                      title: Text(
+                        artisan['fullName'] ?? 'Unknown Artisan',
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      subtitle: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Skill: ${artisan['skill'] ?? 'Unknown Skill'}'),
+                          Text('Business: ${artisan['businessName'] ?? 'Unknown Business'}'),
+                        ],
+                      ),
+                      trailing: const Icon(Icons.arrow_forward_ios),
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => ArtisanDetailsPage(artisan: artisan),
+                          ),
+                        );
+                      },
                     ),
                   );
                 },
               ),
             );
-          },
-        ),
+          } else {
+            return const Center(child: Text('No artisans found.'));
+          }
+        },
       ),
     );
   }
 }
 
-// Sample Data for Artisans (Replace with actual data source)
-final List<Map<String, dynamic>> artisans = [
-  {
-    'name': 'John Kimani',
-    'location': 'Nairobi, Kenya',
-    'shopName': 'John Crafts',
-    'image': 'https://via.placeholder.com/150?text=Artisan+1',
-  },
-  {
-    'name': 'Jane Musyo',
-    'location': 'Mombasa, Kenya',
-    'shopName': 'Smith Art',
-    'image': 'https://via.placeholder.com/150?text=Artisan+2',
-  },
-  {
-    'name': 'Michael Odhiambo',
-    'location': 'Kisumu, Kenya',
-    'shopName': 'Johnson Creations',
-    'image': 'https://via.placeholder.com/150?text=Artisan+3',
-  },
-];
-
-// Artisan Details Page
 class ArtisanDetailsPage extends StatelessWidget {
   final Map<String, dynamic> artisan;
 
@@ -88,7 +90,7 @@ class ArtisanDetailsPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('${artisan['name']} Details'),
+        title: Text('${artisan['fullName']} Details'),
         backgroundColor: Colors.orange.shade600,
       ),
       body: Padding(
@@ -97,22 +99,27 @@ class ArtisanDetailsPage extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             CircleAvatar(
-              backgroundImage: NetworkImage(artisan['image'] ?? ''),
+              backgroundImage: NetworkImage(artisan['imageUrl'] ?? ''),
               radius: 50,
             ),
             const SizedBox(height: 16),
             Text(
-              artisan['name'] ?? 'Unknown Artisan',
+              artisan['fullName'] ?? 'Unknown Artisan',
               style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
             Text(
-              'Location: ${artisan['location'] ?? 'Unknown Location'}',
+              'Skill: ${artisan['skill'] ?? 'Unknown Skill'}',
               style: const TextStyle(fontSize: 16),
             ),
             const SizedBox(height: 8),
             Text(
-              'Shop Name: ${artisan['shopName'] ?? 'Unknown Shop'}',
+              'Business: ${artisan['businessName'] ?? 'Unknown Business'}',
+              style: const TextStyle(fontSize: 16),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Contact: ${artisan['phoneNumber'] ?? 'No phone provided'}',
               style: const TextStyle(fontSize: 16),
             ),
             const SizedBox(height: 16),
